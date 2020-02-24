@@ -1,4 +1,4 @@
-### Work in Progress --- Not yet Usable
+### Work in progress --- Not yet usable
 
 This package allows the simulation of flexible, complex discrete choice demand systems for multiple products.
 
@@ -9,5 +9,10 @@ We have products $j= 1,...,J$ in markets $m = 1, ... , M$. Markets can be differ
 We have consumer types $i= 1,...,I$, who have different preferences over products. Each consumer type can have a different number of consumers $N(i,m)$ in each market $m$. A single consumer is indexed by $n$.
 
 
+The utility function of a consumer is given by:
 
-$$U_{j,m,i,n} = V_{j} + V_{j,m} + V_{j,i} + V_{j,m,i} + V_{j,m,i,n} + \psi_i(p_{j,m}, p_{m})$$ 
+$$\begin{eqnarray}
+U_{j,m,i,n} = & \lambda_{j}(x_{j,m}) +  \lambda_{j,i}(x_{j,m}) + \\
+& \psi^{abs}_i(p_{j,m}) + \psi^{ref}_i(p_{j,m}, p_{m}) +\\
+& \varepsilon_{j} + \varepsilon_{j,m} + \varepsilon_{j,i} + \varepsilon_{j,m,i} + \varepsilon_{j,m,i,n}
+\end{eqnarray}$$
