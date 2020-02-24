@@ -1,0 +1,13 @@
+### Work in Progress --- Not yet Usable
+
+This package allows the simulation of flexible, complex discrete choice demand systems for multiple products.
+
+The simulation does not adhere to popular demand systems like BLP that can be structurally estimated. It allows more flexibility, e.g. reference dependent price preferences. The goal is to study via Monte-Carlo simulations how well we can estimate local price elasticities (own price elasticities and cross-price elasticities) with price experiments possibly also using Machine Learning methods like Double-Lasso or Orthogonal Machine Learning.  
+
+We have products $j= 1,...,J$ in markets $m = 1, ... , M$. Markets can be differentiated by time, place or simply by randomly chosen customer groups in an AB experiment of an online shop. Not all products may be available in all markets.
+
+We have consumer types $i= 1,...,I$, who have different preferences over products. Each consumer type can have a different number of consumers $N(i,m)$ in each market $m$. A single consumer is indexed by $n$.
+
+
+
+$$U_{j,m,i,n} = V_{j} + V_{j,m} + V_{j,i} + V_{j,m,i} + V_{j,m,i,n} + \psi_i(p_{j,m}, p_{m})$$ 
