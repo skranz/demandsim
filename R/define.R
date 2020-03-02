@@ -2,21 +2,18 @@
 
 example = function() {
   prod_df = expand_grid(brand=paste0("b",1:2), type=paste0("t",1:2))
-
-
-  prods = def_prods(prod_df, price_base_min = 1, price_base_max = 1)
-  m_df = def_markets(prods, m = 100,submarkets=2, avail_factor = 1, price_spread = 0)
+  prods = def_prods(prod_df, sigma_eps_j=1)
+  m_df = def_markets(prods, m = 100,submarkets=2)
 
   psi_abs = psi_linear(a=0)
   lambda_ji = NULL
-  n_cons
+  N
   cons = list(
-    def_cons_type(prods,n_cons =  1000, psi_abs=psi_abs, eps_ji=c(10,10,0,0), lambda_ji=NULL),
-    def_cons_type(prods,n_cons =  1000, psi_abs=psi_abs, eps_ji=c(10,10,0,0), lambda_ji=NULL)
+    def_consumer(prods,N = 1000, psi_abs=psi_abs, eps_ji=c(10,10,0,0), lambda_ji=NULL),
+    def_consumer(prods,N = 1000, psi_abs=psi_abs, eps_ji=c(10,10,0,0), lambda_ji=NULL)
   )
 
   ct = cons[[1]]
-  #res = simulate_demand(m_df, cons, V0=-1)
 
   # Pricing experiment
   library(dplyrExtras)
@@ -46,7 +43,7 @@ example = function() {
 }
 
 #' Define products
-def_prods = function(prod_df = tibble(prod=1:10), vars_cat, vars_num, price_base_min=0.8, price_base_max = 1.2) {
+def_prods = function(prod_df = tibble(prod=1:10), vars_cat, vars_num, sigma_eps_j=0, price_base_min=0.8, price_base_max = 1.2) {
 
   vars = setdiff(colnames(prod_df), c("prod","price_base","avail"))
   class = sapply(prod_df[vars], class)
@@ -57,22 +54,36 @@ def_prods = function(prod_df = tibble(prod=1:10), vars_cat, vars_num, price_base
   if (missing(vars_num))
     vars_num = setdiff(vars, vars_cat)
 
+  if (length(vars_num) > 0) {
+    warning("Cannot yet work with numeric product characteristics, they will be ignored.")
+    vars_num = NULL
+  }
+
   vals_cat = lapply(prod_df[vars_cat], unique)
   n_cat = sapply(vals_cat, length)
 
 
-  n_prod = NROW(prod_df)
-  prod_df$prod = 1:n_prod
+  J = NROW(prod_df)
+  prod_df$prod = 1:J
   prod_df$avail = 1
 
   if (!has.col(prod_df, "price_base"))
-    prod_df$price_base = runif(n_prod, price_base_min, price_base_max)
+    prod_df$price_base = runif(J, price_base_min, price_base_max)
 
-  nlist(prod_df, n_prod, vars_num, vars_cat, vals_cat, n_cat)
+  if (!has.col(prod_df, "eps_j")) {
+    if (sigma_eps_j==0) {
+      prod_df$eps_j = 0
+    } else {
+      prod_df$eps_j = rnorm(J,0, sigma_eps_j)
+    }
+  }
+
+
+  nlist(prod_df, J, vars_num, vars_cat, vals_cat, n_cat)
 }
 
 
-def_markets = function(prods,m,submarkets=1, avail_factor = 1, price_spread = 0.2) {
+def_markets = function(prods,m,submarkets=1, avail_factor = 1, price_spread = 0.2, sigma_eps_jm=0) {
   restore.point("new_markets")
 
   res = prods$prod_df
@@ -83,33 +94,38 @@ def_markets = function(prods,m,submarkets=1, avail_factor = 1, price_spread = 0.
 
 
   n = NROW(m_df)
-  n_prod = prods$n_prod
-  m_df$submarket= rep(rep(1:submarkets,each=n_prod), length=n)
+  J = prods$J
+  m_df$submarket= rep(rep(1:submarkets,each=J), length=n)
   m_df$basemarket = ceiling(m_df$market / submarkets)
 
   m_df$price = m_df$price_base * runif(n, 1-(price_spread/2), 1+(price_spread/2))
   m_df$missing = m_df$avail*avail_factor < runif(n)
+
+  if (sigma_eps_jm == 0) {
+    m_df$eps_jm = 0
+  } else {
+    m_df$eps_jm = rnorm(m,0,sigma_eps_jm)
+  }
+
   if (submarkets > 1) {
-    offset = (m_df$submarket-1) * prods$n_prod
+    offset = (m_df$submarket-1) * prods$J
     m_df$price = m_df$price[(1:n)-offset]
     m_df$missing = m_df$missing[(1:n)-offset]
+    m_df$eps_jm = m_df$eps_jm[(1:n)-offset]
   }
-  if (!has.col(m_df,"V_jm"))
-    m_df$V_jm = 0
   m_df
 }
 
 
 #' Define a new consumer type
-def_cons_type = function(prods,n_cons=100,
-  lambda_ji = lambda(prods), psi_abs = psi_linear(), psi_ref = NULL, sigma_eps_ji=1, sigma_eps_jmi=0, sigma_eps_jmin=1, ref_prod = NULL, V0_i=0, eps_ji=NULL) {
+def_consumer = function(prods,N=100,
+  lambda_ji = lambda(prods), psi_abs = psi_linear(), psi_ref = NULL, sigma_eps_ji=1, sigma_eps_jmi=0, sigma_eps_jmin=1, ref_prod = NULL, V_0i=0, eps_ji=NULL) {
   restore.point("new_cons_type")
 
-  u_ji_df = prods$prod_df
-  n_prod = prods$n_prod
+  J = prods$J
 
-  if (!is.null(eps_ji)) {
-    eps_ji = rnorm(n_prod,0,sigma_eps_ji)
+  if (is.null(eps_ji)) {
+    eps_ji = rnorm(J,0,sigma_eps_ji)
   } else {
     sigma_eps_ji = NA
   }
@@ -118,23 +134,24 @@ def_cons_type = function(prods,n_cons=100,
 
   vars_cat = prods$vars_cat
   var_cat = vars_cat[1]
-  for (var_cat in vars_cat) {
-    n = prods$n_cat[var_cat]
-    V_cat = rnorm(n,mean_cat[var_cat],sigma_cat[var_cat])
-    rows = match(u_df[[var_cat]], prods$vals_cat[[var_cat]])
-    V_ji = V_ji+V_cat[rows]
+  if (!is.null(lambda_ji)) {
+    sigma_cat = lambda_ji$sigma_cat
+    mean_cat = lambda_ji$mean_cat
+    for (var_cat in vars_cat) {
+      n = prods$n_cat[var_cat]
+      V_cat = rnorm(n,mean_cat[var_cat],sigma_cat[var_cat])
+      rows = match(u_df[[var_cat]], prods$vals_cat[[var_cat]])
+      V_ji = V_ji+V_cat[rows]
+    }
   }
-  u_ji_df$V_ji = V_ji
 
   if (!is.null(psi_ref)) {
     if (is.null(ref_prod)) {
-      ref_prod = u_ji_df %>%
-        top_n(num_ref_prod, V+rnorm(n, sigma_eps)) %>%
-        pull(prod)
+      ref_prod = sort(V_ji+sigma_eps,decreasing = TRUE,index.return)$ix[num_ref_prod]
     }
   }
   nlist(
-    n_cons,
+    N,
     lambda_ji,
     psi_abs,
     psi_ref,
@@ -142,8 +159,8 @@ def_cons_type = function(prods,n_cons=100,
     sigma_eps_jmi,
     sigma_eps_jmin=1,
     ref_prod,
-    V0_i,
-    u_ji_df
+    V_0i,
+    V_ji
   )
 }
 
@@ -170,12 +187,15 @@ lambda = function(prods, mean_cat=0, sigma_cat=1, mean_num=0, sigma_num=1) {
 
 
 # Reference based price function according to simplified Gutenberg-Model
-psi_gutenberg = function( a = 1,b=2, kink_perc=0.2, num_ref_prod = 5) {
+psi_gutenberg_kinked = function( a = 1,b=2, kink_perc=0.2, num_ref_prod = 5) {
   nlist(price_fun, a, b, kink_perc, num_ref_prod)
 }
 
 psi_linear = function(a=1) {
-  nlist(price_fun="linear", a)
+  price_util_fun = function(m_df,...) {
+    -a*m_df$price
+  }
+  nlist(price_type="linear", price_util_fun, par=nlist(a))
 }
 
 
